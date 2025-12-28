@@ -3,7 +3,6 @@
 own-torrent is a Python App for downloading torrent.
 
 
-
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first

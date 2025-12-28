@@ -218,5 +218,9 @@ __marimo__/
 
 
 # Additional
-.Test Torrent/
+.Test_Torrent/
 *.torrent
+
+
+# ENV for testing etc
+.env
