@@ -220,6 +220,7 @@ __marimo__/
 # Additional
 .Test_Torrent/
 *.torrent
+.config/
 
 
 # ENV for testing etc

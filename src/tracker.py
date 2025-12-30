@@ -139,3 +139,33 @@ def parse_announce_response(resp: bytes) -> Dict[str, Union[int, List[Dict]]] :
         "seeders": seeders,
         "peers": peers
     }
+
+
+def parse_response_type(resp:bytes) -> str:
+    """
+    Parse the action type from a BitTorrent UDP tracker response.
+
+    The first 4 bytes of a UDP tracker response represent the
+    action field (big-endian unsigned int), which determines
+    the type of response.
+
+    Action values:
+        0 -> connect response
+        1 -> announce response
+
+    Else :
+        unknown response    
+
+    Args:
+        resp (bytes): Raw UDP tracker response data.
+
+    Returns:
+        str: The response type ("connect" or "announce").
+    """
+    action = struct.unpack('>I', resp[:4])
+    if (action == 0) :
+        return 'connect'
+    elif (action == 1) :
+        return 'annouce'
+    else :
+        return 'unknown'
