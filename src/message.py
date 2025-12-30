@@ -1,9 +1,70 @@
 import struct
-from typing import OrderedDict
+from typing import Any, Dict, OrderedDict
 
 from src.torrent_parser import info_hash
 from src.utils.generate_id import gen_peer_id
 
+
+
+
+def _build_handshake_bytes (info_hash:bytes, peer_id:bytes) -> bytes:
+    """
+    Build a BitTorrent handshake message from peer_id and info_hash.
+
+    Handshake format:
+        <pstrlen><pstr><reserved><info_hash><peer_id>
+
+    Fields:
+        pstrlen:
+            Length of the protocol string <pstr>, as a single raw byte.
+        pstr:
+            Protocol identifier string.
+        reserved:
+            Eight (8) reserved bytes. All current implementations use zeroes.
+        info_hash:
+            20-byte SHA1 hash of the bencoded 'info' dictionary from the torrent.
+        peer_id:
+            20-byte string used as a unique ID for the client.
+
+    Notes:
+        In BitTorrent protocol version 1.0:
+            - pstrlen = 19
+            - pstr = "BitTorrent protocol"
+
+    Args:
+        info_hash (Bytes):
+            20-byte SHA1 hash of the bencoded 'info' dictionary from the torrent.
+        peer_id (Bytes):
+            20-byte string used as a unique ID for the client.
+        
+
+    Returns:
+        bytes:
+            The complete 68-byte BitTorrent handshake message.
+    """
+    # Constant for Protocol
+    pstr = b"BitTorrent protocol"
+    pstrlen = len(pstr)
+
+    handshake_bytes = bytearray(68)
+
+    # pstrlen
+    handshake_bytes[0] = pstrlen
+
+    # pstr 
+    handshake_bytes[1:1 + pstrlen] = pstr
+
+    # reserved (8 bytes)
+    handshake_bytes[1 + pstrlen : 1 + pstrlen + 8] = b"\x00" * 8
+
+    # info_hash (20 bytes)
+    handshake_bytes[28:48] = info_hash
+
+    # peer_id (20 bytes)
+    handshake_bytes[48:68] = peer_id
+
+
+    return bytes(handshake_bytes)
 
 def build_handshake (torrent:OrderedDict) -> bytes:
     """
@@ -65,6 +126,45 @@ def build_handshake (torrent:OrderedDict) -> bytes:
     return bytes(handshake_bytes)
 
 
+def parse_handshake (payload: bytes) -> Dict[str, Any] : 
+
+
+    # IF < 68 bytes error
+
+    pstr_len:int = payload[0]
+
+    pstr_start:int = 1
+    pstr_end:int = pstr_start + pstr_len
+    pstr:str = payload[pstr_start:pstr_end].decode("utf-8")
+
+    #
+
+    reserved_start:int = pstr_end
+    reserved_end:int = reserved_start + 8
+    reserved: bytes = payload[reserved_start: reserved_end]
+
+
+    # info hash
+    info_hash_start:int = reserved_end
+    info_hash_end:int = info_hash_start + 20
+    info_hash:str = (payload[info_hash_start:info_hash_end]).hex()
+
+    # peer_id (20 bytes) 
+    peer_id_start = info_hash_end 
+    peer_id_end = peer_id_start + 20 
+    peer_id = payload[peer_id_start:peer_id_end].decode('ascii')  
+
+
+    return {
+        "pstrlen": pstr_len,
+        "pstr": pstr,
+        "reserved": reserved.hex(),             # hex str
+        "info_hash": info_hash,                 # hex string
+        "peer_id": peer_id,                     # if ASCII-safe
+    }
+
+
+
 def build_keep_alive() -> bytes:
     """
     Build a BitTorrent keep-alive message.
@@ -78,7 +178,7 @@ def build_keep_alive() -> bytes:
     Returns:
         bytes: 4-byte keep-alive message.
     """
-    return struct.pack('>I', 0);
+    return struct.pack('>I', 0)
 
 def build_choke() -> bytes:
     """

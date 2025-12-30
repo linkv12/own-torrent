@@ -1,19 +1,14 @@
-import os
-
-_id = None
+from src.utils.config_manager import ConfigManager
 
 def gen_peer_id() -> bytes:
     """
-    Generate a 20-byte peer ID for the BitTorrent client.
+    Get the 20-byte peer ID from the ConfigManager.
 
-    The first 8 bytes identify the client version ('-OT0001-').
-    The remaining 12 bytes are random.
+    Ensures a single peer ID per app instance. Loads from
+    config if available, otherwise generates a new one.
+
     Returns:
-        bytes: The packed peer id as a 20-byte binary string.
-
+        bytes: The 20-byte peer ID.
     """
-    global _id
-    if _id is None:
-        _id = bytearray(os.urandom(20))       # 20 random bytes
-        _id[0:8] = b'-AT0001-'                # overwrite first 8 bytes
-    return bytes(_id)
+    config = ConfigManager()  # singleton ensures same instance
+    return config.peer_id

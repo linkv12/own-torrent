@@ -1,5 +1,6 @@
+from pathlib import Path
 import struct
-from typing import OrderedDict
+from typing import OrderedDict, Union
 import hashlib
 import bencodepy
 
@@ -7,17 +8,20 @@ from src.utils.error_catching import catch_exception
 
 
 @catch_exception
-def open_torrent(path: str) -> OrderedDict:
+def open_torrent(path: Union[str, Path]) -> OrderedDict:
     """
     Open and decode a .torrent file using bencodepy.
 
     Args:
-        path (str): Path to the torrent file.
+        path (Union[str, Path]): Path to the .torrent file.
 
     Returns:
         OrderedDict: Decoded Bencoded content of the torrent file.
     """
-    with open(path, 'rb') as files : 
+    if isinstance(path, str) :
+        path = Path(path)
+
+    with path.open('rb') as files :
         return bencodepy.decode(files.read())
 
 @catch_exception
