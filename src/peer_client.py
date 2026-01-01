@@ -1,9 +1,10 @@
 
 
 import asyncio
+import struct
 from typing import Any, Dict, Optional
 
-from src.message import _build_handshake_bytes, parse_handshake
+from src.message import build_handshake_bytes, parse_handshake
 
 
 class Peer:
@@ -30,7 +31,9 @@ class Peer:
 
         # Handshake success n General Connection Health
         self.handshake_sucess:bool = False
+        self.bad_peer:bool = False 
 
+        # Tracking Request for Block           
 
     async def run(self) :
         try:
@@ -38,7 +41,18 @@ class Peer:
             (self.reader, self.writer) = await asyncio.open_connection(host=self.ip, port=self.port)
 
             # 2. Handshake
-            await self._do_handshake() 
+            await self._do_handshake()
+            
+            if (self.handshake_sucess) :
+                
+                # 2.1. Send Unchoke
+                # 2.2. Send Interested
+                # 2.3. Send bitfield
+
+
+                # 3. Main Event Loop
+                await self._handle_message()
+            
              
         except Exception as e:
             print(f"Connection lost with {self.ip}: {e}")
@@ -46,7 +60,7 @@ class Peer:
             await self.close()
 
     async def _do_handshake(self) -> None :
-        hndshake_massage:bytes = _build_handshake_bytes(peer_id=self.my_peer_id, info_hash=self.info_hash)
+        hndshake_massage:bytes = build_handshake_bytes(peer_id=self.my_peer_id, info_hash=self.info_hash)
         try :
             self.writer.write(hndshake_massage)
             await self.writer.drain()
@@ -62,6 +76,9 @@ class Peer:
             # DEBUG
             print("Here is the response")
             print(parsed_resp)
+
+
+
         except asyncio.TimeoutError:
             raise Exception("Handshake timed out")
         except ConnectionResetError:
@@ -90,8 +107,33 @@ class Peer:
                 self.writer = None
                 self.reader = None
 
+    async def _handle_message(self):
+        """Infinite loop that reads and dispatches BitTorrent messages."""
+        try :
+            while True :
+                msg_len_bytes:bytes = await self.reader.readexactly(4)
+                msg_len:int = struct.unpack('>I', msg_len_bytes)[0]
 
-        
+                if msg_len == 0:
+                    continue
 
-    
+                # Message ID
+                msg_id:int = (await self.reader.readexactly(1))[0]
 
+                payload:bytes = await self.reader.readexactly(msg_len - 1)
+
+                # DEBUG!!
+                print(f"msg_len : {msg_len}")
+                print(f"msg_id  : {msg_id}")
+                print(f"payload : {payload.hex()}")
+
+                
+                
+
+
+        except asyncio.IncompleteReadError:
+            print(f"Peer {self.ip} disconnected.")
+            self.bad_peer = True
+        except Exception as e:
+            print(f"Error handling message from {self.ip}: {e}")
+            self.bad_peer = True

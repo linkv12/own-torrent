@@ -2,7 +2,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional, OrderedDict, Union
 
-from src.torrent_parser import open_torrent
+from src.torrent_parser import get_torrent_name, open_torrent
 
 
 class TorrentSource:
@@ -10,7 +10,7 @@ class TorrentSource:
         # 
         self.torrents_dir = torrents_dir
 
-
+        self.name:str = 'unkown torrent'
         # Refference to a string of magnet link
         self.magnet_link: Optional[str] = None
         # Path to .torrent file               
@@ -48,6 +48,8 @@ class TorrentSource:
         if (self.torrent_file is not None) :
             self.decoded_torrent: Optional[OrderedDict] = open_torrent(self.torrent_file)
 
+        self.name = get_torrent_name(self.decoded_torrent)
+
     def to_dict(self) -> Dict[str, Any] :
         """Return a JSON-serializable dict of this TorrentSource."""
         return {
@@ -60,9 +62,9 @@ class TorrentSource:
     @classmethod
     def from_dict(cls, data: dict) -> "TorrentSource":
         """Restore TorrentSource from a dict."""
-        torrents_dir = Path(data["torrents_dir"])
+        torrents_dir: Path = Path(data["torrents_dir"])
         source: Union[str, Path] = data["magnet_link"] if data["torrent_file"] is None else Path(data["torrent_file"])
-        instance = cls(torrent_source=source, torrents_dir=torrents_dir)
+        instance: TorrentSource = cls(torrent_source=source, torrents_dir=torrents_dir)
         return instance
 
 

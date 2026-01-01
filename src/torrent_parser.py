@@ -53,3 +53,22 @@ def total_size(torrent: OrderedDict) -> bytes:
     # Convert integer to 8-byte big-endian binary
     return struct.pack('>Q', size)
 
+def get_torrent_name(torrent:OrderedDict) -> str:
+    """
+    Get Torrent name from info/name
+    
+    Args:
+        torrent (OrderedDict): Decoded torrent content (from bencodepy).
+
+    Returns:
+        str: string representing torrent name or fallback
+    """
+
+    info: OrderedDict = torrent.get(b'info')
+    if not info:
+        return "Unknown"
+
+    name_bytes:bytes = info.get(b'name', b'unknown_torrent')
+
+    return name_bytes.decode('utf-8', errors='replace')
+

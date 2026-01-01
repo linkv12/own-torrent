@@ -222,6 +222,8 @@ __marimo__/
 *.torrent
 .config/
 
+.test/
+
 
 # ENV for testing etc
 .env

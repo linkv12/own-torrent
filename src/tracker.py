@@ -1,7 +1,5 @@
 import os
-import socket
 import struct
-from urllib.parse import urlparse
 import random
 
 from typing import List, Dict, OrderedDict, Union

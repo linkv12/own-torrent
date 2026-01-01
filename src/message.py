@@ -4,10 +4,7 @@ from typing import Any, Dict, OrderedDict
 from src.torrent_parser import info_hash
 from src.utils.generate_id import gen_peer_id
 
-
-
-
-def _build_handshake_bytes (info_hash:bytes, peer_id:bytes) -> bytes:
+def build_handshake_bytes (info_hash:bytes, peer_id:bytes) -> bytes:
     """
     Build a BitTorrent handshake message from peer_id and info_hash.
 
@@ -125,7 +122,6 @@ def build_handshake (torrent:OrderedDict) -> bytes:
 
     return bytes(handshake_bytes)
 
-
 def parse_handshake (payload: bytes) -> Dict[str, Any] : 
 
 
@@ -162,8 +158,6 @@ def parse_handshake (payload: bytes) -> Dict[str, Any] :
         "info_hash": info_hash,                 # hex string
         "peer_id": peer_id,                     # if ASCII-safe
     }
-
-
 
 def build_keep_alive() -> bytes:
     """
@@ -260,7 +254,6 @@ def build_not_interested() -> bytes:
     """
     return struct.pack('>IB', 1, 3)
 
-
 def build_have(piece_index:int) -> bytes:
     """
     Build a BitTorrent have message.
@@ -345,7 +338,6 @@ def build_piece(payload:dict) -> bytes :
     length = 9 + len(payload['block'])
     return struct.pack('>IBII', length, 7, payload['index'], payload['begin']) + payload['block']
 
-
 def build_cancel(payload:dict) -> bytes :
     """
     Build a BitTorrent cancel message.
@@ -371,7 +363,6 @@ def build_cancel(payload:dict) -> bytes :
         payload['index'], 
         payload['begin'], 
         payload['length'])
-
 
 def build_port(port: int) -> bytes: 
     """
