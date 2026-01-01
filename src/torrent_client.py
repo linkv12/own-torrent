@@ -137,6 +137,10 @@ class TorrentClient:
             }
         }
     
+    @property
+    def info_hash(self) -> str:
+        return self.torrent_source.info_hash
+    
     @classmethod
     def from_dict(cls, data:Dict[str, Any]) -> "TorrentClient" :
 

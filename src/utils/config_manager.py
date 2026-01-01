@@ -5,6 +5,10 @@ import shutil
 import threading
 from typing import Any, Dict, Optional
 
+# TODO :
+# [After UI]        Change to SQLite
+# [After SQLite]    Add dirty and clean state {Skip check on finished too}
+
 
 class ConfigManager:
     """
@@ -123,6 +127,52 @@ class ConfigManager:
         target_path = self.torrents_dir / source_path.name
         shutil.copy2(source_path, target_path)
         return target_path
+
+
+    def save_client_state(self, info_hash_hex:str, state_dict:Dict[str, Any]) -> None:
+        """
+        Save or update the state of a specific torrent client.
+        
+        Args:
+            info_hash_hex (str): The unique hex string of the torrent's info hash.
+            state_dict (Dict[str, Any]): The dictionary returned by TorrentClient.to_dict().
+        """
+
+        with self._lock : 
+            states: Dict = {}
+
+            if self.client_state.exists():
+                try:
+                    states:Dict = json.loads(self.client_state.read_text())
+                except json.JSONDecodeError:
+                    states:Dict = {}
+
+            states[info_hash_hex] = state_dict
+
+            self.client_state.write_text(json.dumps(states, indent=4))
+
+    def get_all_client_state(self) -> Dict[str, Any]:
+        """
+        return all Serialized the Torrent Client state.
+        """
+        if not self.client_state.exists() :
+            return {}
+        
+        try:
+            return json.loads(self.client_state.read_text())
+        except json.JSONDecodeError:
+            return {}
+
+    def get_client_state(self, info_hash_hex:str) ->  Dict[str, Any] | None:
+        if not self.client_state.exists() :
+            return None
+        
+        try:
+            all_state:Dict[str, Any] = json.loads(self.client_state.read_text())
+            return all_state.get(info_hash_hex, None)
+        except json.JSONDecodeError:
+            return None
+
 
 
     @staticmethod
