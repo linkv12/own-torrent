@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional, Union
 
 
 from src.disk_manager import DiskManager
+from src.peer_manager import PeerManager
 from src.piece_manager import PieceManager
 from src.torrent_source import TorrentSource
 from src.utils.config_manager import ConfigManager
@@ -54,6 +55,10 @@ class TorrentClient:
         self.date_added: float = date_added or time()
         self.max_peers: int = max_peers
 
+        # Self Hydrate Flag
+        # $for re-check
+        self.hydrate: bool = hydrate
+
         # Lock 
         self._piece_manager_lock: asyncio.Lock = asyncio.Lock()
 
@@ -63,14 +68,20 @@ class TorrentClient:
         self.piece_manager: PieceManager = PieceManager(torrent=self.torrent_source.decoded_torrent)
 
         # $disk_manager  = write and read from disk
-        if not hydrate :
-            file_map = DiskManager.generate_filemap(torrent=self.torrent_source.decoded_torrent, download_base_dir=self.download_path)
-            self.disk_manager:DiskManager = DiskManager(file_map)
-        else :
-            self.disk_manager: DiskManager = None
-        # $tracker_manager = periodically announce and receive tracker response
         # $peer_manager = Manage peer connection
+        if not hydrate :
+            # New Creation
+            file_map = DiskManager.generate_filemap(torrent=self.torrent_source.decoded_torrent, download_base_dir=self.download_path)
+            self.disk_manager:DiskManager = DiskManager(file_map, self.piece_manager.piece_size)
+            self.peer_manager: PeerManager = PeerManager(self.piece_manager, self.disk_manager)
+        else :
+            # This two component will be handled on @from_dict
+            self.disk_manager: DiskManager = None
+            self.peer_manager: PeerManager = None
 
+        # $tracker_manager = periodically announce and receive tracker response
+        
+        
         #
 
     # For startup
@@ -80,6 +91,10 @@ class TorrentClient:
         Transitions the client from a static state to an active process.
         1. Check local files integrity 
         """
+
+        # 2. Integrity Check (The "Force Recheck")
+        # Refine to not do on each start up, but believe saved state bitfield
+
 
         # Assumption :
         # 1. PieceManager Initialized
@@ -96,15 +111,16 @@ class TorrentClient:
         # 2. Integrity Check (The "Force Recheck")
         # We loop through every piece index defined in the metadata
         total_pieces:int = self.piece_manager.total_pieces
-        piece_length:int = self.piece_manager.piece_size
-        total_size:int = self.piece_manager.total_size
+        # piece_length:int = self.piece_manager.piece_size
+        # total_size:int = self.piece_manager.total_size
 
         for i in range(total_pieces):
 
-            data:bytes = await self.disk_manager.read_piece(i, piece_length, total_size)
+            data:bytes = await self.disk_manager.read_piece(i)
+            # data:bytes = await self.disk_manager.read_piece(i, piece_length, total_size)
             # Optimization: If the data is all zeros or empty, skip hashing
-            if not data or all(v == 0 for v in data):
-                continue
+            # if not data or all(v == 0 for v in data):
+            #     continue
 
             if self.piece_manager.verify_piece(i, data):
                 self.piece_manager.mark_piece_complete(i)
@@ -117,7 +133,8 @@ class TorrentClient:
 
         self.status = TorrentStatus.DOWNLOADING
 
-
+    def add_peer(self, ip:str, port:int) -> None :
+        self.peer_manager.add_peer(ip, port, bytes.fromhex(self.info_hash), self.peer_id)
 
     def to_dict(self: "TorrentClient") -> Dict[str, Any] :
         """
@@ -168,6 +185,39 @@ class TorrentClient:
         else :
             # if corrupted re-initialize
             file_map = DiskManager.generate_filemap(torrent=client.torrent_source.decoded_torrent, download_base_dir=client.download_path)
-            client.disk_manager = DiskManager(file_map)
+            client.disk_manager = DiskManager(file_map, client.piece_manager.piece_size)
+
+
+        # Init our peer manager here
+        client.peer_manager = PeerManager(client.piece_manager, client.disk_manager)
 
         return client
+    
+
+    async def start(self) -> None :
+        """
+        The Main Event Loop for the Torrent Client.
+        """
+        # 1. Boring stuff (Integrity check and starting Disk Workers)
+        await self.startup()
+
+        # 2. Start the PeerManager Dispatcher
+        await self.peer_manager.start()
+
+        
+
+        # CRITICAL: This allows the Peer.run task to actually begin!
+        await asyncio.sleep(0.5)
+
+        # 
+        try:
+            while self.status == TorrentStatus.DOWNLOADING: 
+                if self.piece_manager.is_complete:
+                    self.status = TorrentStatus.FINISHED
+                    break
+                    
+                await asyncio.sleep(60*30)
+        except asyncio.CancelledError:
+            print("Shutting down client...")
+        finally:
+            await self.shutdown()

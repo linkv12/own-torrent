@@ -1,60 +1,23 @@
 import os
 from pathlib import Path
 import asyncio
-from typing import Dict, List, OrderedDict, Tuple, Union
+from typing import Dict, List, Optional, OrderedDict, Tuple, Union
+
+from src.torrent_parser import total_size
 
 class DiskManager:
 
-    @classmethod
-    def generate_filemap(cls : "DiskManager" ,torrent: OrderedDict, download_base_dir:Path) -> List[Dict[str, Union[Path, int]]] :
-        if not download_base_dir :
-            raise Exception("Download Base Dir not Supplied")
-        
-        file_map: List[Dict] = []
-        current_global_offset: int = 0
-
-        base_path: Path = Path(download_base_dir)
-
-        info: OrderedDict = torrent.get(b'info', {})
-
-        # # 1. Multi-File Torrent
-        if b'files' in info:
-            # root
-            root_dir:str = info[b'name'].decode('utf-8') 
-
-            for f in info[b'files'] :   # f is OrderedDict
-                length:int = f[b'length']
-
-                path_parts:List[str] = [p.decode('utf-8') for p in f[b'path']]
-
-                full_path:Path = base_path / root_dir / Path(*path_parts)
-
-                file_map.append({
-                    'path'          : full_path,
-                    'size'          : length,
-                    'start_offset'  : current_global_offset,
-                    'end_offset'    : current_global_offset + length
-                })
-                current_global_offset += length
-        else :
-            length: int = info[b'length']
-            filename: str = info[b'name'].decode('utf-8')
-            full_path: Path = base_path / filename
-            
-            file_map.append({
-                'path'          : full_path,
-                'size'          : length,
-                'start_offset'  : current_global_offset,
-                'end_offset'    : current_global_offset + length
-            })
-
-        return file_map
 
     # Constructor
-    def __init__(self: "DiskManager", file_map:List[Dict[str, Union[Path, int]]], queue_size: int = 200) -> None:
+    def __init__(self: "DiskManager", file_map:List[Dict[str, Union[Path, int]]], piece_size: Optional[int] = None, queue_size: int = 200) -> None:
         
         self.file_map: List[Dict[str, Union[Path, int]]] = file_map
         self.queue: asyncio.Queue[Tuple[int, bytes]] = asyncio.Queue(maxsize=queue_size)
+
+        self.piece_size:  Optional[int] = piece_size
+
+        # _calculate_total_size
+        self.total_size:int = sum([f['size'] for f in self.file_map]) 
 
         self._stop_event : asyncio.Event = asyncio.Event()
 
@@ -75,7 +38,7 @@ class DiskManager:
                     file.truncate(f_info['size'])
 
     # Write to disk
-    async def _sync_write(self, global_offset:int, data:bytes) :
+    def _sync_write(self, global_offset:int, data:bytes) :
         """Standard library blocking I/O performed in a thread."""
         remaining_data:bytes = data
         current_offset:int = global_offset
@@ -170,7 +133,8 @@ class DiskManager:
         return bytes(read_buffer)
 
     # Read Piece High Level API
-    async def read_piece(self, index:int, piece_length:int, total_size:int) -> bytes:
+    # async def read_piece(self, index:int, piece_length:int, total_size:int) -> bytes:
+    async def read_piece(self, index:int) -> bytes:
         """
         Calculates the global offset and reads a full piece from the virtual byte stream.
         
@@ -179,36 +143,68 @@ class DiskManager:
         usually shorter than the standard piece_length, is read with the correct 
         number of bytes for accurate SHA-1 hashing.
 
+        This one is for Piece validation.
+
         Args:
             index (int): The zero-based index of the piece to read.
-            piece_length (int): The standard length of a piece in bytes.
-            total_size (int): The total size of the torrent (sum of all files).
 
         Returns:
             bytes: The raw data for the requested piece, exactly as it exists on disk.
         """
-        global_offset:int = index * piece_length
+        global_offset:int = index * self.piece_size
 
-        if (global_offset + piece_length > total_size) :
-            actual_read_length:int = total_size - global_offset
+        if (global_offset + self.piece_size > self.total_size) :
+            actual_read_length:int = self.total_size - global_offset
         else :
-            actual_read_length:int = piece_length
-
-
+            actual_read_length:int = self.piece_size
 
         return await asyncio.to_thread(self._sync_read, global_offset, actual_read_length)
     
+    # Read Piece High Level API
+    async def read_block(self, index:int, begin: int, length:int) -> bytes:
+        """
+        Calculates the global offset and reads a specific block from the virtual byte stream.
+
+        This method is the granular counterpart to read_piece, specifically designed 
+        to handle BitTorrent 'Request' messages (ID 6). It translates a piece index 
+        and a relative 'begin' offset into a global position. 
+
+        It includes safety truncation to handle the final block of the torrent, 
+        ensuring that requests exceeding the total_size do not result in out-of-bounds 
+        errors or incorrect padding.
+
+        Args:
+            index (int): The zero-based index of the piece.
+            begin (int): The byte offset within the piece (from the Peer request).
+            length (int): The number of bytes requested (usually 16,384).
+
+        Returns:
+            bytes: The raw block data from disk. Returns an empty byte-string if the 
+                offset is out of bounds.
+        """
+
+        global_offset: int = (index * self.piece_size) + begin
+
+        if global_offset >= self.total_size :
+            return b''
+        
+        if global_offset + length >= self.total_size:
+            length = total_size - global_offset
+        
+        return await asyncio.to_thread(self._sync_read, global_offset, length)
 
     # Main Event Loop
     async def start_worker(self):
         """The background loop that processes the queue."""
-        while self._stop_event.is_set():
+        while not self._stop_event.is_set():
             try :
 
                 # 1. Get data from queue
                 # (int, bytes)
                 (global_offset, data) = await self.queue.get() 
 
+
+                # print(f"Writing : {global_offset}")
                 # Offload the blocking write to a separate thread
                 # This keeps the main loop responsive
                 await asyncio.to_thread(self._sync_write, global_offset, data) 
@@ -253,7 +249,8 @@ class DiskManager:
                 } for f in self.file_map
 
             ], 
-            'queue_size' : self.queue.maxsize
+            'queue_size' : self.queue.maxsize,
+            'piece_size' : self.piece_size
         }
     
     # De-Serialization
@@ -270,8 +267,54 @@ class DiskManager:
         ]
 
         queue_size: int = data['queue_size'] or 200
+        piece_size: Optional[int] = data['piece_size'] or None  
 
-        instance: DiskManager = cls(file_map, queue_size)
+        instance: DiskManager = cls(file_map, piece_size, queue_size)
 
         return instance
+    
+    @classmethod
+    def generate_filemap(cls : "DiskManager" ,torrent: OrderedDict, download_base_dir:Path) -> List[Dict[str, Union[Path, int]]] :
+        if not download_base_dir :
+            raise Exception("Download Base Dir not Supplied")
+        
+        file_map: List[Dict] = []
+        current_global_offset: int = 0
+
+        base_path: Path = Path(download_base_dir)
+
+        info: OrderedDict = torrent.get(b'info', {})
+
+        # # 1. Multi-File Torrent
+        if b'files' in info:
+            # root
+            root_dir:str = info[b'name'].decode('utf-8') 
+
+            for f in info[b'files'] :   # f is OrderedDict
+                length:int = f[b'length']
+
+                path_parts:List[str] = [p.decode('utf-8') for p in f[b'path']]
+
+                full_path:Path = base_path / root_dir / Path(*path_parts)
+
+                file_map.append({
+                    'path'          : full_path,
+                    'size'          : length,
+                    'start_offset'  : current_global_offset,
+                    'end_offset'    : current_global_offset + length
+                })
+                current_global_offset += length
+        else :
+            length: int = info[b'length']
+            filename: str = info[b'name'].decode('utf-8')
+            full_path: Path = base_path / filename
+            
+            file_map.append({
+                'path'          : full_path,
+                'size'          : length,
+                'start_offset'  : current_global_offset,
+                'end_offset'    : current_global_offset + length
+            })
+
+        return file_map
 

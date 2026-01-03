@@ -317,6 +317,38 @@ def build_request(payload:dict) -> bytes :
         payload['begin'], 
         payload['length'])
 
+def parse_request(payload:bytes) -> Dict[str, int]:
+    """
+    Parse a BitTorrent request message.
+    12 bytes >III of <index><begin><length>
+
+    Requests a specific block within a piece.
+
+    Format:
+        <length=13><id=6><index><begin><length>
+        With out >IB length=13 and id
+
+    Args:
+        payload (byte): Packed bittorrent request
+
+    Returns:
+        dict: Dictionary containing:
+            - 'index' (int): Piece index.
+            - 'begin' (int): Byte offset within the piece.
+            - 'length' (int): Number of bytes requested.
+    """
+
+    index:int = 0
+    begin:int = 0
+    length:int = 0
+
+    index, begin, length = struct.unpack('>III', payload)
+    return {
+        'index': index,
+        'begin': begin,
+        'length': length,
+    }
+
 def build_piece(payload:dict) -> bytes :
     """
     Build a BitTorrent piece message.
@@ -337,6 +369,48 @@ def build_piece(payload:dict) -> bytes :
     """ 
     length = 9 + len(payload['block'])
     return struct.pack('>IBII', length, 7, payload['index'], payload['begin']) + payload['block']
+
+def parse_piece(payload:bytes) -> Dict[str, int | bytes] :
+    """
+    Parse a BitTorrent piece message.
+
+    Receive a block of data for a specific piece.
+
+    Format:
+        <length=9+X><id=7><index><begin><block>
+
+    Args:
+        payload (bytes) : expected response from bittorrent client
+
+    Returns:
+        Dict[str, int | bytes]: Dictionary containing:
+            - index (int): Piece index.
+            - begin (int): Byte offset within the piece.
+            - block (bytes): Block data.
+    """
+    length: int = struct.unpack('>I', payload[0:4])[0]
+
+    # msg_id: int = struct.unpack('>B', payload[4:5])[0]  
+
+    # print(f'gggggg :{msg_id}')
+    # we already know 
+
+    index:int   = struct.unpack('>I', payload[5:9])[0]
+    begin:int   = struct.unpack('>I', payload[9:13])[0]
+
+    block: bytes = payload[13: 13 + (length - 9)]
+
+    return {
+        'index': index,
+        'begin': begin,
+        'block': block
+    }
+
+
+
+
+
+
 
 def build_cancel(payload:dict) -> bytes :
     """
