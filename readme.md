@@ -15,6 +15,16 @@ This project is experimental and not ready for real-world use.
 - Download data from peers (**self**-testing)
 - Basic torrent protocol handling
 
+## Roadmap
+
+Planned improvements and features:
+
+- [] Implement end-game stategy
+- [] Implement block request timeout
+- [] Terminal Interface
+
+---
+
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first
