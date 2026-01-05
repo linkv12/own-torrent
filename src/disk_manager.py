@@ -1,3 +1,4 @@
+from logging import shutdown
 import os
 from pathlib import Path
 import asyncio
@@ -203,18 +204,24 @@ class DiskManager:
                 # (int, bytes)
                 (global_offset, data) = await self.queue.get() 
 
-
+                try  :
                 # print(f"Writing : {global_offset}")
                 # Offload the blocking write to a separate thread
                 # This keeps the main loop responsive
-                await asyncio.to_thread(self._sync_write, global_offset, data) 
+                    await asyncio.to_thread(self._sync_write, global_offset, data) 
                 
-            except Exception as e :
-                print(f"Disk Worker Error: {e}")
+                except asyncio.CancelledError as e:
+                    print(f"Disk Write Error at {global_offset}: {e}")
+                finally :
+                    self.queue.task_done()
+                
+            except asyncio.CancelledError:
+                # This is normal during shutdown
+                break 
+            except Exception as e:
+                print(f"Disk Worker Loop Error: {e}")
 
-            finally :
-                self.queue.task_done()
-
+        await self.shutdown()
 
 
 

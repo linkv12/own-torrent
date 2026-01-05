@@ -138,6 +138,9 @@ class PeerManager:
                 def task_checker(task):
                     try:
                         task.result()
+                    except asyncio.CancelledError:
+                        # Ignore cancellation during shutdown
+                        pass
                     except Exception as e:
                         print(f"!!! CRITICAL: Peer Task for {ip} CRASHED: {e}")
 
@@ -261,6 +264,7 @@ class PeerManager:
         # # Payload:bytes     : Peer Bitfield         (Peers bitfield in bytes)
         # # Note              : We have to update peer bitfield from payload
         peer.peer_bitfield = bytearray(payload['payload'])
+        print('their bitfield: ',payload['payload'].hex())
 
     async def _handle_request(self, peer: Peer, payload: Dict[str, int | bytes]) -> None :
         """Peer send us its request for data block
@@ -318,9 +322,11 @@ class PeerManager:
         await self.disk_manager.add_write_request(global_offset, pars_payload['block'])
 
         is_piece_finished : bool = self.piece_manager.mark_block_received(pars_payload['index'], pars_payload['begin'])
+
+        # print(self.piece_manager.bitfield.hex())
         # Verify the piece and update bitfield
         if (is_piece_finished) :
-            # print(f"piece finished: {pars_payload['index']}")
+            print(f"piece finished: {pars_payload['index']}")
             asyncio.create_task(self._verify_and_broadcast(pars_payload['index']))
 
 

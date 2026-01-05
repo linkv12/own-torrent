@@ -204,7 +204,8 @@ class TorrentClient:
         # 2. Start the PeerManager Dispatcher
         await self.peer_manager.start()
 
-        
+        # testing
+        self.add_peer('127.0.0.1', 51413)
 
         # CRITICAL: This allows the Peer.run task to actually begin!
         await asyncio.sleep(0.5)
@@ -221,3 +222,7 @@ class TorrentClient:
             print("Shutting down client...")
         finally:
             await self.shutdown()
+
+    
+    async def shutdown(self) -> None :
+        print("TorrentClient shutdown ...")

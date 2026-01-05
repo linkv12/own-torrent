@@ -143,17 +143,15 @@ class Peer:
 
     async def _process_outgoing_requests(self) -> None:
 
-        while not self._stop_event.is_set() :
-            try :
+        try :
+            while not self._stop_event.is_set() :
                 # print("Sending request")
                 req_payload: Dict[str, int] = await self.request_queue.get()
                 await self._send_request(req_payload)
-
-
                 self.request_queue.task_done()
-            except Exception as e :  # noqa: F841
-
-                break
+          
+        except Exception as e :  # noqa: F841
+            return 
 
 
 

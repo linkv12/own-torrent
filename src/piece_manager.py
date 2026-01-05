@@ -3,6 +3,7 @@ from enum import Enum
 from hashlib import sha1
 import math
 import struct
+from time import time
 from typing import Dict, List, Optional, OrderedDict, Tuple
 
 from src.torrent_parser import total_size
@@ -106,8 +107,11 @@ class PieceManager:
                 continue
 
             for block in piece.blocks:
-                if block['state'] == BlockState.Missing :
+                if ((block['state'] == BlockState.Missing) or 
+                    (block['state'] == BlockState.Pending and (time() - block.get('time', 0 )) > 15)) :
+
                     block['state'] = BlockState.Pending
+                    block['time'] = time()
 
                     
                     return (piece.index, block['begin'], block['length'])
@@ -158,7 +162,12 @@ class PieceManager:
     # Init empty pieces: List[Piece]
     def _init_pieces_list(self) -> None:
         for i in range(self.total_pieces):
-            piece: Piece = Piece(i, self.piece_size)
+            if i == self.total_pieces - 1:
+                actual_size: int = self.total_size - (i * self.piece_size)
+            else : 
+                actual_size: int = self.piece_size
+
+            piece: Piece = Piece(i, actual_size)
 
             if (self.has_piece(i)) :
                 piece.mark_as_finished()
@@ -239,8 +248,8 @@ class Piece :
                 {
                     'begin': begin,
                     'length': length,
-                    'state' : BlockState.Missing
-
+                    'state' : BlockState.Missing,
+                    'time' : time()
                 }
 
             )
