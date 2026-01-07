@@ -74,4 +74,24 @@ class TorrentSource:
         return instance
 
 
+    @classmethod
+    def info_hash(cls, torr_path: Path) -> str :
+        ret_val: str = ''
+        try :
+
+
+            # torr_path : Have to be exists
+            torr: OrderedDict = open_torrent(path=torr_path)
+
+            ret_val = info_hash(torr).hex()
+        except Exception:
+            pass
+
+        finally:
+            return ret_val
+
+        
+
+
+
 

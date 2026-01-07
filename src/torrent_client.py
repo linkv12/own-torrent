@@ -39,6 +39,8 @@ class TorrentClient:
             download_path (Union[str, Path]): Directory or file path to save the downloaded data.
         """
 
+
+        self._initialized: bool = False
         # Note peer id is generated for each run
 
         self.config_manager: ConfigManager = ConfigManager()
@@ -67,6 +69,13 @@ class TorrentClient:
         # $piece_manager = Manage Pieces
         self.piece_manager: PieceManager = PieceManager(torrent=self.torrent_source.decoded_torrent)
 
+
+        # New components for peer handling
+        self.peer_queue: asyncio.Queue[tuple[str, int]] = asyncio.Queue()
+        self.discovered_peers: set[tuple[str, int]] = set()
+        self._processor_task: Optional[asyncio.Task] = None
+
+
         # $disk_manager  = write and read from disk
         # $peer_manager = Manage peer connection
         if not hydrate :
@@ -83,6 +92,8 @@ class TorrentClient:
         
         
         #
+
+
 
     # For startup
     # Do the boring stuff 
@@ -133,6 +144,47 @@ class TorrentClient:
 
         self.status = TorrentStatus.DOWNLOADING
 
+        self._initialized: bool = True
+
+        
+    def add_peers(self, peers: list[tuple[str, int]]) -> None:
+        """
+        Called periodically by TrackerManager (via TorrentClientManager).
+        Pushes new peers into the queue for connection attempts.
+        """
+        for ip, port in peers:
+            if (ip, port) not in self.discovered_peers:
+                self.discovered_peers.add((ip, port))
+                # Thread-safe way to add to queue from the Tracker loop
+                self.peer_queue.put_nowait((ip, port))
+
+    async def _peer_processor(self):
+        """
+        Background task that manages connection attempts.
+        """
+        while self.status != TorrentStatus.FINISHED:
+            try:
+                # Wait for next peer from the tracker
+                ip, port = await self.peer_queue.get()
+
+                # Only connect if we haven't hit the max_peers limit
+                if self.peers_amount < self.max_peers:
+                    # We create a task so we can connect to multiple peers in parallel
+                    asyncio.create_task(
+                        self.add_peer(
+                            ip, 
+                            port
+                        )
+                    )
+                
+                self.peer_queue.task_done()
+            except asyncio.CancelledError:
+                break
+            except Exception :
+                # Log error without stopping the whole loop
+                continue
+
+
     def add_peer(self, ip:str, port:int) -> None :
         self.peer_manager.add_peer(ip, port, bytes.fromhex(self.info_hash), self.peer_id)
 
@@ -158,6 +210,27 @@ class TorrentClient:
     def info_hash(self) -> str:
         return self.torrent_source.info_hash
     
+    @property
+    def torrent_name(self) -> str:
+        if isinstance(self.torrent_source, TorrentSource) :
+            return self.torrent_source.name
+        else :
+            return "Unknown Torrent"
+    
+    @property
+    def calculate_progress(self) -> float:
+        try :
+            return (self.piece_manager.completed_count / self.piece_manager.total_pieces) * 100
+        except Exception :
+            return 0.0
+        
+    @property
+    def peers_amount(self) -> int:
+        try :
+            return len(self.peer_manager.peers)
+        except Exception :
+            return 0
+
     @classmethod
     def from_dict(cls, data:Dict[str, Any]) -> "TorrentClient" :
 
@@ -202,13 +275,13 @@ class TorrentClient:
         await self.startup()
 
         # 2. Start the PeerManager Dispatcher
-        await self.peer_manager.start()
+        self.p: asyncio.Task = asyncio.create_task(self.peer_manager.start())
 
-        # testing
-        self.add_peer('127.0.0.1', 51413)
+        # 3. Start the Peer Queue Processor
+        self._processor_task = asyncio.create_task(self._peer_processor())
 
         # CRITICAL: This allows the Peer.run task to actually begin!
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(5)
 
         # 
         try:
@@ -216,13 +289,29 @@ class TorrentClient:
                 if self.piece_manager.is_complete:
                     self.status = TorrentStatus.FINISHED
                     break
+
+                # Dynamic adjustment: if we dropped too many peers, 
+                # maybe clear 'discovered' to allow retries.
+                if self.peers_amount < (self.max_peers // 2) and self.peer_queue.empty():
+                    self.discovered_peers.clear()
                     
-                await asyncio.sleep(60*30)
+                await asyncio.sleep(1) # Frequency of status/UI checks
         except asyncio.CancelledError:
-            print("Shutting down client...")
+            print(f"Shutting down client: {self.torrent_name}")
         finally:
+            if self._processor_task:
+                self._processor_task.cancel()
             await self.shutdown()
 
     
-    async def shutdown(self) -> None :
+    async def shutdown(self) -> Dict[str, Any] :
+        # state: Dict[str, Any] = {self.info_hash: self.to_dict()}
+        state: Dict[str, Any] = self.to_dict()
+
+        _ = await self.disk_manager.shutdown()
+        await self.peer_manager.stop()
+
+        
         print("TorrentClient shutdown ...")
+
+        return state

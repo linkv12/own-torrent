@@ -132,7 +132,7 @@ def parse_announce_response(resp: bytes) -> Dict[str, Union[int, List[Dict]]] :
 
     return {
         "action": action,
-        "transactionId": transaction_id,
+        "transaction_id": transaction_id,
         "leechers": leechers,
         "seeders": seeders,
         "peers": peers

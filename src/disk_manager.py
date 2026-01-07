@@ -1,4 +1,3 @@
-from logging import shutdown
 import os
 from pathlib import Path
 import asyncio
@@ -200,18 +199,22 @@ class DiskManager:
         while not self._stop_event.is_set():
             try :
 
-                # 1. Get data from queue
-                # (int, bytes)
-                (global_offset, data) = await self.queue.get() 
+                # 1. Get data from queue with a timeout
+                # This allows the loop to check the stop_event regularly
+                try :
+                    (global_offset, data) = await asyncio.wait_for(self.queue.get(), timeout=1.0) 
+                except asyncio.TimeoutError:
+                    continue
 
-                try  :
-                # print(f"Writing : {global_offset}")
+                # 2. Offload the blocking write
                 # Offload the blocking write to a separate thread
                 # This keeps the main loop responsive
+                try  :
                     await asyncio.to_thread(self._sync_write, global_offset, data) 
-                
-                except asyncio.CancelledError as e:
-                    print(f"Disk Write Error at {global_offset}: {e}")
+
+                except Exception as e:
+                    print(f"REAL Disk Write Error at {global_offset}: {e}")
+                    self._stop_event.set()
                 finally :
                     self.queue.task_done()
                 
@@ -220,7 +223,8 @@ class DiskManager:
                 break 
             except Exception as e:
                 print(f"Disk Worker Loop Error: {e}")
-
+                break
+        # Final cleanup after breaking out of the loop
         await self.shutdown()
 
 

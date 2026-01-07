@@ -47,7 +47,10 @@ class PeerManager:
         if self._dispatch_task :
             self._dispatch_task.cancel()
 
-        print('PeerManager Dispatcher stoping ...')
+        if self._scheduler_task :
+            self._scheduler_task.cancel()
+
+        # print('PeerManager Dispatcher stoping ...')
 
 
     async def _global_dispatcher(self) -> None :

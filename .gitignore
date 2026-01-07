@@ -221,7 +221,7 @@ __marimo__/
 .Test_Torrent/
 *.torrent
 .config/
-
+Downloads/
 .test/
 
 

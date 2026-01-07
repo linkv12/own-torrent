@@ -1,6 +1,6 @@
 
 import asyncio
-from http import client
+from http import client  # noqa: F401
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -42,12 +42,15 @@ async def main_and_save():
 
     # 5. Run Startup
     # MUST use 'await' here to run the integrity check and start the disk worker
-    await torr_client.startup()
+    # await torr_client.startup()
+    await torr_client.start()
+    
     
     # 6. Check Results
     print("--- Phase 2: Startup Complete ---")
     print(f"Status: {torr_client.status}")
     print(f"Progress: {torr_client.piece_manager.completed_count}/{torr_client.piece_manager.total_pieces} pieces verified.")
+    print(f"Bitfield: {torr_client.piece_manager.bitfield.hex()}")
 
     # 7. Check Write Config
     print("--- Phase 7: Write to Client Config ---") # For resume
@@ -70,7 +73,7 @@ async def test_restore_from_file():
     
     torrent_path = Path(test_folder) / torrent_file
     config_dir = Path(".config/torrents")
-    download_base_dir = Path.cwd() / os.environ.get("TESTFOLDERx", ".test")
+    download_base_dir = Path.cwd() / os.environ.get("TESTFOLDERx", ".test")  # noqa: F841
 
 
     
@@ -91,13 +94,18 @@ async def test_restore_from_file():
 
     # 5. Run Startup
     # MUST use 'await' here to run the integrity check and start the disk worker
-    await torr_client.startup()
+    # await torr_client.startup()
+    await torr_client.start()
     
     # 6. Check Results
     print("--- Phase 2: Startup Complete ---")
     print(f"Status: {torr_client.status}")
     print(f"Progress: {torr_client.piece_manager.completed_count}/{torr_client.piece_manager.total_pieces} pieces verified.")
+    print(f"Bitfield: {torr_client.piece_manager.bitfield.hex()}")
 
+
+    # 7. Use this 
+    # torr_client.add_peer('127.0.0.1', 51413)
 
     
     # TODO: 
@@ -108,6 +116,6 @@ async def test_restore_from_file():
 if __name__ == "__main__":
     # This is the entry point for async Python scripts
     try:
-        asyncio.run(test_restore_from_file())
+        asyncio.run(main_and_save())
     except KeyboardInterrupt:
         print("\nTest interrupted by user.")
