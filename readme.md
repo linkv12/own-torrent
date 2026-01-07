@@ -2,26 +2,28 @@
 
 **own-torrent** is a Python application for downloading torrent data.
 
-Currently, it supports downloading from a **local torrent file** to itself,  
-with a download speed limited to approximately **160 kB/s**.
+Capable to download from UDP tracked torrent. 
 
-> 🚧 This project is under active development and is not yet production-ready.
+> 🚧 This project is under active development and is not yet production-ready.<br>Heavy Refactoring is needed.
 
 This project is experimental and not ready for real-world use.
 
 ## Features
 
 - Parse local `.torrent` files
-- Download data from peers (**self**-testing)
+- Download data from peers
 - Basic torrent protocol handling
 
 ## Roadmap
 
 Planned improvements and features:
 
-- [] Implement end-game stategy
-- [] Implement block request timeout
-- [] Terminal Interface
+- [ ] Implement end-game stategy
+- [x] Implement block request timeout
+- [x] Terminal Interface
+- [ ] Clear debug log
+- [ ] Refactor project structure
+- [ ] Configuration for the App
 
 ---
 
