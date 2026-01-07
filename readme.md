@@ -25,7 +25,22 @@ Planned improvements and features:
 - [ ] Refactor project structure
 - [ ] Configuration for the App
 
----
+## Usage
+Clone the repository, then do the following step.
+
+```sh
+# 1. Create Vitual Enviroment
+python -m venv .venv
+
+# 2. Activate
+source .venv/bin/activate
+
+# 3. Instal depedency
+pip install -r requirements.txt
+
+# 4. Run the app
+python app.py
+```
 
 ## Contributing
 
