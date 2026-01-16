@@ -167,7 +167,7 @@ class PeerManager:
             print("Peers already exist")
 
     # Remove Peer
-    def remove_peer(self, peer: "Peer"): 
+    async def remove_peer(self, peer: "Peer"): 
         try:
             if peer in self.peers:
                 self.peers.remove(peer)
