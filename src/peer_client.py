@@ -52,7 +52,7 @@ class Peer:
         self.bad_peer:bool = False
 
         # Tracking Request for Block
-        self.request_queue: asyncio.Queue[Dict[str, int]] = asyncio.Queue(maxsize=10)
+        self.request_queue: asyncio.Queue[Dict[str, int]] = asyncio.Queue(maxsize=2)
 
 
         # 
