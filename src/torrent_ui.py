@@ -84,6 +84,9 @@ class TorrentUI(App):
         
         table.add_column("#", key="col_no", width=2)
         table.add_column("Name", key="col_name")
+        table.add_column("Size", key="col_size")
+        table.add_column("Down.", key="col_down_speed", width=12)
+        table.add_column("Up.", key="col_up_speed", width=12)
         table.add_column("Status", key="col_status")
         table.add_column("Progress", key="col_progress")
         table.add_column("Peers", key="col_peers")
@@ -117,6 +120,9 @@ class TorrentUI(App):
                 
                 # ✅ Update cells (including the # number)
                 table.update_cell(row_key, "col_no", idx_str)
+                table.update_cell(row_key, "col_size", torrent.size)
+                table.update_cell(row_key, "col_down_speed", torrent.speed[0])
+                table.update_cell(row_key, "col_up_speed", torrent.speed[1])
                 table.update_cell(row_key, "col_status", torrent.status)
                 table.update_cell(row_key, "col_progress", prog_str)
                 table.update_cell(row_key, "col_peers", peer_str)
@@ -126,6 +132,9 @@ class TorrentUI(App):
                 table.add_row(
                     idx_str,          # Matches col_no
                     torrent.name,     # Matches col_name
+                    torrent.size,     # Matches col_size
+                    torrent.speed[0], # Matches col_down_speed
+                    torrent.speed[1], # Matches col_up_speed
                     torrent.status,   # Matches col_status
                     prog_str,         # Matches col_progress
                     peer_str,         # Matches col_peers

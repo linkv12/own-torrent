@@ -64,6 +64,35 @@ class TorrentSource:
             "torrents_dir"  : str(self.torrents_dir)
         }
     
+    @property
+    def size(self: "TorrentSource") -> str | None :
+        """Return a Human readable size from torrent
+
+        Args:
+            self (TorrentSource): its own
+
+        Returns:
+            str | None: Human readable or None
+        """
+        info: OrderedDict = self.decoded_torrent[b"info"]
+        length:int = 0
+        return_str: str|None = None
+
+
+        if (b"length" in info) :
+            length = info[b"length"]
+        elif b"files" in info:
+            length = sum(file[b"length"] for file in info[b"files"])
+        
+
+
+        for unit in ["B", "KB", "MB", "GB", "TB"] :
+            if (length < 1024) :
+                return_str = f"{length:.2f} {unit}"
+                break
+            length = length / 1024
+
+        return return_str
 
     @classmethod
     def from_dict(cls, data: dict) -> "TorrentSource":

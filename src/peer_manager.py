@@ -4,12 +4,16 @@
 
 import asyncio
 import struct
-from typing import Callable, Dict, List, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, List, Tuple
 
 from src.disk_manager import DiskManager
 from src.message import parse_piece, parse_request
 from src.peer_client import Peer
 from src.piece_manager import PieceManager
+
+if TYPE_CHECKING:
+    from src.torrent_client import TorrentClient
+
 
 
 # TODO :
@@ -35,6 +39,9 @@ class PeerManager:
         self._scheduler_task: asyncio.Task | None = None  
 
 
+        self.torrent_client: TorrentClient | None = None
+
+
     async def start(self) -> None :
         self.running.set()
         self._dispatch_task = asyncio.create_task(self._global_dispatcher())
@@ -52,6 +59,9 @@ class PeerManager:
 
         # print('PeerManager Dispatcher stoping ...')
 
+
+    def attach_torrent_client(self: "PeerManager", client: "TorrentClient") :
+        self.torrent_client = client
 
     async def _global_dispatcher(self) -> None :
         """Handle received from Peer
@@ -130,7 +140,7 @@ class PeerManager:
         
     # Add and remove peer
     def add_peer(self, ip: str, port: int, info_hash: bytes, peer_id: bytes) -> None :
-        print("DEBUG add peer called inside PeerManager")
+        # print("DEBUG add peer called inside PeerManager")
         if not(any(p.ip == ip and p.port == port for p in self.peers)) :
             try :
                 new_peer: Peer = Peer(ip, port, info_hash, peer_id)
@@ -156,7 +166,13 @@ class PeerManager:
         else :
             print("Peers already exist")
 
-
+    # Remove Peer
+    def remove_peer(self, peer: "Peer"): 
+        try:
+            if peer in self.peers:
+                self.peers.remove(peer)
+        except Exception :
+            pass
 
     # Verify downloaded
     async def _verify_and_broadcast(self, index:int) -> None :
@@ -301,6 +317,10 @@ class PeerManager:
             # 4. Read using DiskManager
             block_data: bytes = self.disk_manager.read_block(req_payload['index'], req_payload['begin'], req_payload['length'])
 
+            # 4.1 How much data comming from peer
+            if self.torrent_client:
+                self.torrent_client.total_uploaded += len(block_data)
+
             # 5. Sending it to the peers
             await peer._send_piece(req_payload['index'], req_payload['begin'], block_data)
 
@@ -318,6 +338,10 @@ class PeerManager:
         # 1. Re-construct
         resp_payload: bytes = struct.pack('>IB', payload['msg_len'], payload['msg_id']) + payload['payload']
         pars_payload: Dict[str, int | bytes] = parse_piece(resp_payload)
+
+        # 1.1 How much data comming from peer
+        if self.torrent_client:
+            self.torrent_client.total_downloaded += len(payload['payload'])
 
         # 2. Calculate Global Offsett
         global_offset: int = (pars_payload['index'] * self.piece_manager.piece_size) + pars_payload['begin']

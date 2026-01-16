@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from pathlib import Path
 
-from attr import dataclass
+from dataclasses import dataclass
 
 
 from src.torrent_client import TorrentClient
@@ -22,6 +22,8 @@ from src.utils.config_manager import ConfigManager
 class TorrentState:
     info_hash: str
     name: str
+    size: str
+    speed: str
     status: str
     progress: float
     num_peers: int
@@ -92,10 +94,15 @@ class TorrentApp:
             new_snapshot.append(TorrentState(
                 info_hash=h,
                 name=c.torrent_name,
+                size=c.torrent_source.size,
+                speed=c.get_speed_strings(),
                 status=c.status.name,
                 progress=c.calculate_progress, # Compute once here
                 num_peers=c.peers_amount
             ))
+            # self.notify_user(message=c.torrent_source.size, title="Torrent Size")
+        
+        
         self._ui_snapshot = new_snapshot
 
 

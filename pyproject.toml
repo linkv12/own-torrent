@@ -1,0 +1,19 @@
+[project]
+name = "own-torrent"
+version = "0.1.0"
+description = "Torrent Protocol Implementation"
+authors = [
+    {name = "Mahfi",email = "36815864+linkv12@users.noreply.github.com"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "bencodepy (>=0.9.5,<0.10.0)",
+    "textual (>=7.3.0,<8.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

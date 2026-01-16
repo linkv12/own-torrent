@@ -56,6 +56,8 @@ class Peer:
 
 
         # 
+        self.is_active: bool = True
+
 
     def peer_has_piece(self, index: int) -> bool:
         if not (0 <= index < len(self.peer_bitfield)) :
@@ -68,7 +70,6 @@ class Peer:
 
     async def run(self, peer_manager: PeerManager) :
         print(f"peer is running @{self.ip}:{self.port}")
-
         try:
             # 1. Open TCP Connection
             (self.reader, self.writer) = await asyncio.open_connection(host=self.ip, port=self.port)
@@ -91,6 +92,8 @@ class Peer:
                     await self._send_interested()
 
                 # 2.3. Send Unchoke for Upload Capability 
+                
+
 
                 # 3. Main Event Loop
                 await asyncio.gather(
@@ -102,7 +105,9 @@ class Peer:
         except Exception as e:
             print(f"Connection lost with {self.ip}: {e}")
         finally:
+            self.is_active = False # CRITICAL: mark as inactive
             await self.close()
+            await peer_manager.remove_peer(self)
 
 
 
@@ -226,9 +231,11 @@ class Peer:
         except asyncio.IncompleteReadError:
             print(f"Peer {self.ip} disconnected.")
             self.bad_peer = True
+            self.is_active = False
         except Exception as e:
             print(f"Error handling message from {self.ip}: {e}")
             self.bad_peer = True
+            self.is_active = False
 
     async def close(self):
         """Safely shuts down the TCP connection and clears the writer."""

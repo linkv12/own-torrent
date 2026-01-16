@@ -215,7 +215,8 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-
+# Poetry
+poetry.lock
 
 # Additional
 .Test_Torrent/

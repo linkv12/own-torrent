@@ -83,6 +83,8 @@ class TorrentClient:
             file_map = DiskManager.generate_filemap(torrent=self.torrent_source.decoded_torrent, download_base_dir=self.download_path)
             self.disk_manager:DiskManager = DiskManager(file_map, self.piece_manager.piece_size)
             self.peer_manager: PeerManager = PeerManager(self.piece_manager, self.disk_manager)
+
+            self.peer_manager.attach_torrent_client(self)
         else :
             # This two component will be handled on @from_dict
             self.disk_manager: DiskManager = None
@@ -91,7 +93,14 @@ class TorrentClient:
         # $tracker_manager = periodically announce and receive tracker response
         
         
-        #
+        # for stat
+        self.total_downloaded: int = 0  # Total bytes ever downloaded
+        self.total_uploaded: int = 0    # Total bytes ever uploaded
+        
+        self._last_download_count = 0
+        self._last_upload_count = 0
+        self._last_tick_time:float = time()
+        
 
 
 
@@ -185,6 +194,37 @@ class TorrentClient:
                 continue
 
 
+    def get_speed_strings(self) -> tuple[str, str]:
+
+
+        now: float = time()
+        dt: float = now - self._last_tick_time
+
+        if dt <= 0 :
+            return "0 B/s", "0 B/s" 
+
+        # Calculate Rates
+        dl_rate: float = (self.total_downloaded - self._last_download_count) / dt
+        ul_rate: float = (self.total_uploaded - self._last_upload_count) / dt
+
+        # Update snapshots for next call
+        self._last_download_count = self.total_downloaded
+        self._last_upload_count = self.total_uploaded
+        self._last_tick_time = now
+
+        return self.format_speed(dl_rate), self.format_speed(ul_rate) 
+    
+    @staticmethod
+    def format_speed(bps: float) -> str :
+        """Helper to turn raw bytes/sec into human readable strings."""
+        if bps <= 0: return "0 B/s"
+        for unit in ['B/s', 'KiB/s', 'MiB/s', 'GiB/s']:
+            if bps < 1024:
+                return f"{bps:.1f} {unit}"
+            bps /= 1024
+        return f"{bps:.1f} TiB/s"
+
+
     def add_peer(self, ip:str, port:int) -> None :
         self.peer_manager.add_peer(ip, port, bytes.fromhex(self.info_hash), self.peer_id)
 
@@ -227,7 +267,7 @@ class TorrentClient:
     @property
     def peers_amount(self) -> int:
         try :
-            return len(self.peer_manager.peers)
+            return len([p for p in self.peer_manager.peers if p.is_active])
         except Exception :
             return 0
 
@@ -263,6 +303,7 @@ class TorrentClient:
 
         # Init our peer manager here
         client.peer_manager = PeerManager(client.piece_manager, client.disk_manager)
+        client.peer_manager.attach_torrent_client(client)
 
         return client
     
